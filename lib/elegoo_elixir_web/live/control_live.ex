@@ -103,7 +103,7 @@ defmodule ElegooElixirWeb.ControlLive do
   def render(assigns) do
     ~H"""
     <main class="control-shell mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      <section class="control-card mb-6 overflow-hidden rounded-2xl p-6 sm:p-8">
+      <section class="control-card mb-6 overflow-hidden rounded-2xl p-5">
         <div class="flex flex-wrap items-end justify-between gap-4">
           <div class="space-y-2">
             <p class="text-xs font-semibold uppercase tracking-[0.22em] text-teal-700">
@@ -142,7 +142,7 @@ defmodule ElegooElixirWeb.ControlLive do
 
       <section class="grid gap-6 xl:grid-cols-[1.8fr_1fr]">
         <article class="control-card overflow-hidden rounded-2xl">
-          <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+          <div class="flex items-center justify-between border-b border-slate-200 px-5 py-5">
             <h2 class="text-sm font-bold uppercase tracking-[0.14em] text-slate-700">Live Kamera</h2>
           </div>
           <img src={@stream_url} alt="Camera stream" class="aspect-video w-full object-cover" />
@@ -179,8 +179,8 @@ defmodule ElegooElixirWeb.ControlLive do
         </article>
       </section>
 
-      <section class="control-card mt-6 rounded-2xl p-5 sm:p-6">
-        <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <section class="control-card mt-6 rounded-2xl p-5">
+        <div class="mb-4 flex flex-wrap items-start justify-between gap-2">
           <h2 class="text-sm font-bold uppercase tracking-[0.14em] text-slate-700">
             Joystick-Steuerung
           </h2>
