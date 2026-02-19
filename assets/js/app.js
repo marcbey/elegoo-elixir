@@ -180,11 +180,59 @@ const Joystick = {
   },
 }
 
+const CameraPanSlider = {
+  mounted() {
+    this.lastPan = this.el.value
+
+    this.onInput = () => {
+      const pan = this.el.value
+      if (pan === this.lastPan) return
+
+      this.lastPan = pan
+      this.pushEvent("camera_pan", {pan})
+    }
+
+    this.el.addEventListener("input", this.onInput)
+  },
+
+  updated() {
+    this.lastPan = this.el.value
+  },
+
+  destroyed() {
+    this.el.removeEventListener("input", this.onInput)
+  },
+}
+
+const EmergencyStopButton = {
+  mounted() {
+    this.feedbackTimer = null
+
+    this.onClick = () => {
+      this.el.classList.remove("is-feedback")
+      void this.el.offsetWidth
+      this.el.classList.add("is-feedback")
+
+      clearTimeout(this.feedbackTimer)
+      this.feedbackTimer = setTimeout(() => {
+        this.el.classList.remove("is-feedback")
+      }, 220)
+    }
+
+    this.el.addEventListener("click", this.onClick)
+  },
+
+  destroyed() {
+    clearTimeout(this.feedbackTimer)
+    this.el.removeEventListener("click", this.onClick)
+  },
+}
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, Joystick},
+  hooks: {...colocatedHooks, Joystick, CameraPanSlider, EmergencyStopButton},
 })
 
 // Show progress bar on live navigation and form submits

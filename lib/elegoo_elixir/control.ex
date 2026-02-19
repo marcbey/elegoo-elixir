@@ -28,6 +28,11 @@ defmodule ElegooElixir.Control do
   @joystick_deadzone 0.04
   @sensor_timeout_ms 250
   @reverse_spin_threshold_deg 25
+  @camera_servo_id 1
+  @camera_servo_center_deg 90
+  @camera_servo_min_deg 15
+  @camera_servo_max_deg 165
+  @camera_servo_step_deg 15
 
   @spec subscribe() :: :ok | {:error, term()}
   def subscribe, do: CarTcpClient.subscribe()
@@ -68,6 +73,15 @@ defmodule ElegooElixir.Control do
     vector = joystick_vector(x, y)
     execute_joystick_vector(vector)
   end
+
+  @spec set_camera_servo(integer()) :: {:ok, binary()} | {:error, term()}
+  def set_camera_servo(angle_deg) do
+    angle_deg = quantize_camera_servo_angle(angle_deg)
+    CarTcpClient.send_command(CarProtocol.servo_command(@camera_servo_id, angle_deg))
+  end
+
+  @spec camera_servo_center_deg() :: integer()
+  def camera_servo_center_deg, do: @camera_servo_center_deg
 
   @spec joystick_vector(number(), number()) :: joystick_vector()
   def joystick_vector(x, y) do
@@ -230,6 +244,15 @@ defmodule ElegooElixir.Control do
     command = CarProtocol.motor_speed_command(left_speed, right_speed)
 
     with {:ok, _} <- CarTcpClient.send_command(command), do: {:ok, :moved}
+  end
+
+  defp quantize_camera_servo_angle(angle_deg) do
+    angle_deg
+    |> CarProtocol.clamp(@camera_servo_min_deg, @camera_servo_max_deg)
+    |> Kernel./(@camera_servo_step_deg)
+    |> round()
+    |> Kernel.*(@camera_servo_step_deg)
+    |> CarProtocol.clamp(@camera_servo_min_deg, @camera_servo_max_deg)
   end
 
   defp command_from_wheel_speeds(0, 0, _steer_deg), do: {:stop, :stop}

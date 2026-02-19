@@ -43,6 +43,7 @@
   - `N=21`: Ultraschallstatus/-wert abfragen.
   - `N=22`: Liniensensor links/mitte/rechts abfragen.
   - `N=102`: Rocker-Befehle (diskrete Richtungen inkl. Stop).
+  - `N=5`: Servo-Steuerung (`D1` = Servo-ID, `D2` = Winkelwert im Bereich `10..170`).
 - Heartbeat muss unterstuetzt werden (`{Heartbeat}`), damit die Verbindung stabil bleibt.
 
 ## 7. Features der Steueroberflaeche
@@ -64,6 +65,10 @@
 - Sichtbarer Verbindungsstatus (TCP ok/getrennt, Stream ok/fehlt).
 - Not-Aus-Button, der sofort Stop (`N=100`) ausloest.
 - Automatischer Verbindungsaufbau.
+- Kamera-Servo-Steuerung:
+  - Slider mit Mittelstellung (`90°` = geradeaus).
+  - Schwenken nach links/rechts in `15°`-Schritten.
+  - Begrenzung im UI auf `15°..165°` zur Vermeidung von Endanschlag-nahem Verhalten.
 - Terminal-CLI:
   - Ausfuehrbar ueber `mix car ...` im Projektverzeichnis.
   - Unterstuetzt mindestens: `connect`, `stop`, `drive`, `turn`, `sensor`, `status`.
@@ -113,6 +118,10 @@
   - Rueckwaerts: nicht ueber `N=4` (da nur vorwaerts), sondern ueber `N=3` mit Richtung `backward`.
   - Drehen auf der Stelle: ueber `N=3` mit Richtung `left`/`right`.
   - Stop: immer `N=100`.
+  - Kamera-Servo: ueber `N=5`, fuer den Kamera-Schwenkservo `D1=1`.
+    - Winkel wird als `D2=angle` gesendet (nicht `*10`).
+    - Firmware rechnet intern `Position_angle = D2 / 10` und schreibt `10 * Position_angle`.
+    - UI quantisiert auf `15°`-Raster, mit Zentrum bei `90°`.
 
 - Joystick-Mapping (praxisbewaehrt):
   - Eingang: normalisierte Achsen `x,y` in `[-1.0,1.0]`.
@@ -143,6 +152,8 @@
   - Bei `blur`/`visibilitychange` immer sofort `joystick_release` senden.
   - `setPointerCapture`/`releasePointerCapture` defensiv in `try/catch` behandeln.
   - Beim Release muss sofort `Stop` gesendet und UI intern auf Zentrum zurueckgesetzt werden.
+  - Not-Aus-Button-Feedback soll clientseitig (Hook-basiert) sofort beim Klick sichtbar sein, unabhaengig vom Server-Roundtrip.
+    - Aktueller Standard: Tailwind-UI-nahes rotes Button-Pattern (Focus-Ring, Hover/Active States), Beschriftung "Not Aus", plus kurzer CSS-Schatten-Effekt beim Klick.
 
 - Netz/Diagnose:
   - Meldung "keine TCP-Verbindung" bedeutet meist: Host hat keine Route zu `192.168.4.1:100` (nicht zwingend UI-Fehler).

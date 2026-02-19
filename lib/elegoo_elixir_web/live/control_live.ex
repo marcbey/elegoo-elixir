@@ -1,6 +1,7 @@
 defmodule ElegooElixirWeb.ControlLive do
   use ElegooElixirWeb, :live_view
 
+  alias ElegooElixir.CarProtocol
   alias ElegooElixir.Control
 
   @impl true
@@ -21,6 +22,8 @@ defmodule ElegooElixirWeb.ControlLive do
      |> assign(:steer_deg, 0)
      |> assign(:last_drive_command, :stop)
      |> assign(:driving_active, false)
+     |> assign(:camera_pan, 0)
+     |> assign(:camera_angle, Control.camera_servo_center_deg())
      |> assign(:ultrasound, nil)
      |> assign(:line_sensors, %{left: nil, middle: nil, right: nil})
      |> assign(:last_error, nil)}
@@ -42,6 +45,19 @@ defmodule ElegooElixirWeb.ControlLive do
       |> maybe_assign_error(Control.stop())
 
     {:noreply, assign(socket, :status, Control.status())}
+  end
+
+  def handle_event("emergency_stop", _params, socket) do
+    socket =
+      socket
+      |> assign(:joystick, %{x: 0.0, y: 0.0})
+      |> assign(:steer_deg, 0)
+      |> assign(:last_drive_command, :stop)
+      |> assign(:driving_active, false)
+      |> maybe_assign_error(Control.stop())
+      |> assign(:status, Control.status())
+
+    {:noreply, socket}
   end
 
   def handle_event("joystick_move", params, socket) do
@@ -76,6 +92,27 @@ defmodule ElegooElixirWeb.ControlLive do
       |> assign(:last_drive_command, :stop)
       |> assign(:driving_active, false)
       |> maybe_assign_error(Control.stop())
+      |> assign(:status, Control.status())
+
+    {:noreply, socket}
+  end
+
+  def handle_event("camera_pan", %{"pan" => pan}, socket) do
+    pan = pan |> parse_int(0) |> quantize_camera_pan()
+    angle = Control.camera_servo_center_deg() + pan
+
+    result =
+      if angle == socket.assigns.camera_angle do
+        {:ok, :unchanged}
+      else
+        Control.set_camera_servo(angle)
+      end
+
+    socket =
+      socket
+      |> assign(:camera_pan, pan)
+      |> assign(:camera_angle, angle)
+      |> maybe_assign_error(result)
       |> assign(:status, Control.status())
 
     {:noreply, socket}
@@ -185,10 +222,12 @@ defmodule ElegooElixirWeb.ControlLive do
             Joystick-Steuerung
           </h2>
           <button
-            class="rounded-2xl bg-rose-600 px-8 py-5 text-xl font-black tracking-wide text-white shadow-lg shadow-rose-200 transition hover:bg-rose-500"
-            phx-click="stop"
+            id="emergency-stop-btn"
+            class="e-stop-btn inline-flex items-center justify-center rounded-xl bg-rose-600 px-8 py-5 text-xl font-extrabold tracking-wide text-white shadow-lg shadow-rose-600/30 transition hover:bg-rose-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 active:bg-rose-700"
+            phx-hook="EmergencyStopButton"
+            phx-click="emergency_stop"
           >
-            Not-Aus
+            Not Aus
           </button>
         </div>
 
@@ -216,6 +255,29 @@ defmodule ElegooElixirWeb.ControlLive do
               ]}>
                 {steering_label(@joystick)}
               </p>
+            </div>
+            <div class="rounded-xl bg-slate-50 p-4">
+              <p class="text-xs font-semibold uppercase tracking-[0.11em] text-slate-500">
+                Kamera (Servo)
+              </p>
+              <p class="mt-1 text-lg font-black text-slate-900">{@camera_angle}°</p>
+              <input
+                id="camera-pan-slider"
+                type="range"
+                name="pan"
+                min="-75"
+                max="75"
+                step="15"
+                value={@camera_pan}
+                class="mt-3 w-full accent-teal-600"
+                phx-hook="CameraPanSlider"
+                aria-label="Kamera seitlich schwenken"
+              />
+              <div class="mt-2 flex justify-between text-xs font-semibold uppercase text-slate-500">
+                <span>Links</span>
+                <span>Mitte</span>
+                <span>Rechts</span>
+              </div>
             </div>
             <div class="grid grid-cols-2 gap-3">
               <div class="rounded-xl bg-slate-50 p-3">
@@ -282,9 +344,25 @@ defmodule ElegooElixirWeb.ControlLive do
     end
   end
 
+  defp parse_int(value, default) do
+    case Integer.parse(to_string(value)) do
+      {parsed, _rest} -> parsed
+      _ -> default
+    end
+  end
+
   defp clamp_float(value, min, _max) when value < min, do: min
   defp clamp_float(value, _min, max) when value > max, do: max
   defp clamp_float(value, _min, _max), do: value
+
+  defp quantize_camera_pan(pan) do
+    pan
+    |> CarProtocol.clamp(-75, 75)
+    |> Kernel./(15)
+    |> round()
+    |> Kernel.*(15)
+    |> CarProtocol.clamp(-75, 75)
+  end
 
   defp joystick_power_percent(%{x: x, y: y}) do
     magnitude = :math.sqrt(x * x + y * y)

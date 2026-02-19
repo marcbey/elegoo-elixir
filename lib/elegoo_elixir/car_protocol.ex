@@ -50,6 +50,17 @@ defmodule ElegooElixir.CarProtocol do
     }
   end
 
+  @spec servo_command(1 | 2 | 3, integer()) :: map()
+  def servo_command(servo_id, angle_deg) when servo_id in [1, 2, 3] do
+    %{
+      "N" => 5,
+      "D1" => servo_id,
+      # Firmware computes Position_angle = D2 / 10 and then writes 10 * Position_angle.
+      # Therefore D2 must be sent in the 10..170 scale directly (not multiplied by 10).
+      "D2" => clamp(angle_deg, 10, 170)
+    }
+  end
+
   @spec ultrasound_command(1 | 2) :: map()
   def ultrasound_command(mode \\ 2) when mode in [1, 2] do
     %{"N" => 21, "D1" => mode}
