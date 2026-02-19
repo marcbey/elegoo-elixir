@@ -8,6 +8,8 @@ defmodule Mix.Tasks.Car do
     mix car stop
     mix car drive --direction forward --speed 120
     mix car turn --steer 40 --speed 160
+    mix car servo --angle 120
+    mix car servo --center
     mix car sensor --type ultrasound
     mix car sensor --type line --side all
   """
@@ -51,6 +53,9 @@ defmodule Mix.Tasks.Car do
 
       ["turn" | rest] ->
         run_turn(rest, timeout_ms(global_opts))
+
+      ["servo" | rest] ->
+        run_servo(rest, timeout_ms(global_opts))
 
       ["sensor" | rest] ->
         run_sensor(rest, timeout_ms(global_opts))
@@ -131,6 +136,34 @@ defmodule Mix.Tasks.Car do
       end
 
     print_result(result, "sensor")
+  end
+
+  defp run_servo(args, timeout_ms) do
+    {opts, _, invalid} =
+      OptionParser.parse(args, strict: [angle: :integer, center: :boolean], aliases: [a: :angle])
+
+    if invalid != [] do
+      Mix.raise("Invalid servo options: #{inspect(invalid)}")
+    end
+
+    if opts[:center] && Keyword.has_key?(opts, :angle) do
+      Mix.raise("Invalid servo options: --center and --angle are mutually exclusive")
+    end
+
+    angle =
+      cond do
+        opts[:center] ->
+          Control.camera_servo_center_deg()
+
+        Keyword.has_key?(opts, :angle) ->
+          opts[:angle]
+
+        true ->
+          Control.camera_servo_center_deg()
+      end
+
+    ensure_connected!(timeout_ms)
+    print_result(Control.set_camera_servo(angle), "servo")
   end
 
   defp ensure_connected!(timeout_ms) do
@@ -217,6 +250,7 @@ defmodule Mix.Tasks.Car do
       mix car stop [--host HOST] [--port PORT]
       mix car drive --direction forward|backward|left|right --speed 0..255
       mix car turn --steer -100..100 --speed 0..255
+      mix car servo [--angle 15..165 | --center]
       mix car sensor --type ultrasound
       mix car sensor --type line --side all|left|middle|right
     """)

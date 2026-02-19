@@ -61,8 +61,9 @@
   - `15°`-Schritte links/rechts.
   - UI-Limit `15°..165°`.
 - CLI (`mix car ...`):
-  - mindestens `connect`, `stop`, `drive`, `turn`, `sensor`, `status`.
+  - mindestens `connect`, `stop`, `drive`, `turn`, `servo`, `sensor`, `status`.
   - `turn` mit explizitem Lenkeinschlag und Geschwindigkeit.
+  - `servo` fuer Kamera-Schwenk (`--angle` oder `--center`).
 
 ## 8. Safety und Laufzeit
 - Bei Disconnect/Socket-Fehler: sicherer Stop (`N=100`, falls erreichbar) und Status auf getrennt.
@@ -131,6 +132,7 @@
   - `D2` wird als Winkelwert gesendet (nicht `*10`).
   - Firmware macht intern `Position_angle = D2 / 10` und schreibt danach `10 * Position_angle`.
   - UI quantisiert auf `15°`, Zentrum `90°`, Bereich `15°..165°`.
+  - CLI bietet `mix car servo --angle <deg>` sowie `mix car servo --center`; ohne Option wird auf Zentrum (`90°`) gesetzt.
 
 - Entkopplung und Latenz:
   - Joystick-Events nicht blind senden; deduplizieren ueber stabilen `command_key`.

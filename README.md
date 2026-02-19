@@ -12,7 +12,7 @@ Aktuell laeuft die App komplett ohne Datenbank.
   - Kamera-Live-Stream
   - Ultraschall- und Linien-Sensoren
   - Kamera-Servo-Slider (`15°`-Raster, Zentrum `90°`)
-- Terminal-CLI (`mix car ...`) fuer Fahr- und Sensor-Kommandos
+- Terminal-CLI (`mix car ...`) fuer Fahr-, Sensor- und Kamera-Servo-Kommandos
 
 ## Setup
 
@@ -41,12 +41,12 @@ mix car connect
 mix car stop
 mix car drive --direction forward --speed 120
 mix car turn --steer 40 --speed 160
+mix car servo --angle 120
+mix car servo --center
 mix car sensor --type ultrasound
 mix car sensor --type line --side all
 mix car --host 192.168.4.1 --port 100 --timeout 1500 status
 ```
-
-Aktuell ist die Kamera-Servo-Steuerung in der Web-UI verfuegbar (nicht als eigener CLI-Subcommand).
 
 ## Tests
 
