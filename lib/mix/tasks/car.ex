@@ -21,7 +21,7 @@ defmodule Mix.Tasks.Car do
   @impl true
   def run(args) do
     {global_opts, command_args, invalid} =
-      OptionParser.parse(args,
+      OptionParser.parse_head(args,
         strict: [host: :string, port: :integer, timeout: :integer],
         aliases: [h: :host, p: :port]
       )
