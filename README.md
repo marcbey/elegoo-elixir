@@ -2,6 +2,8 @@
 
 Browser- und Terminal-Steuerung fuer das Elegoo Smart Robot Car V4.0 mit Phoenix + LiveView und `:gen_tcp`.
 
+Aktuell laeuft die App komplett ohne Datenbank.
+
 ## Features
 
 - LiveView Web-UI mit:
@@ -16,7 +18,6 @@ Browser- und Terminal-Steuerung fuer das Elegoo Smart Robot Car V4.0 mit Phoenix
 
 ```bash
 mix deps.get
-mix ecto.create
 ```
 
 ## Web UI starten

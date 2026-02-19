@@ -19,6 +19,7 @@
 - Elixir
 - Phoenix + LiveView
 - Tailwind CSS
+- Keine aktive Datenbank im aktuellen Architekturstand.
 
 ## 5. Zielarchitektur
 - `CarTcpClient` (GenServer): Connection-Lifecycle, Reconnect, Framing (`{...}`), Heartbeat, Tx/Rx.
@@ -140,6 +141,11 @@
   - `setPointerCapture`/`releasePointerCapture` defensiv in `try/catch`.
   - Not-Aus-Feedback clientseitig (Hook), sofort sichtbar, unabhaengig vom Roundtrip.
   - Aktueller Not-Aus-Style: Tailwind-UI-nahes rotes Pattern, Text `Not Aus`, kurzer Klick-Schatten-Effekt.
+
+- Betriebsmodus ohne DB:
+  - App laeuft vollstaendig ohne Repo/Ecto-Migrator.
+  - `mix setup` und `mix test` setzen keine Ecto-Schritte voraus.
+  - `ConnCase` ist rein HTTP-basiert ohne Sandbox-Setup.
 
 - Netzdiagnose:
   - `:disconnected` bedeutet haeufig fehlende Route zum Fahrzeug.

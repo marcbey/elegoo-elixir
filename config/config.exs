@@ -7,10 +7,6 @@
 # General application configuration
 import Config
 
-config :elegoo_elixir,
-  ecto_repos: [ElegooElixir.Repo],
-  generators: [timestamp_type: :utc_datetime]
-
 config :elegoo_elixir, :car,
   host: "192.168.4.1",
   port: 100,
