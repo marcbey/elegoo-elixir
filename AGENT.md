@@ -103,11 +103,19 @@
   - Vorwaerts + Kurve: primaer `N=4`.
   - Rueckwaerts: `N=3 backward` (nicht `N=4`).
   - Drehen auf Stelle: `N=3 left/right`.
+  - Rueckwaerts-Lenkung reagiert auf jeden quantisierten Lenkeinschlag (`±5°`) direkt mit `left/right` statt erst ab hoher Schwelle.
   - Stop: immer `N=100`.
 
 - Joystick-Mapping:
   - Eingang `x,y` in `[-1.0,1.0]`.
-  - Deadzone nahe Zentrum (`~0.04`).
+  - Getrennte Deadzones:
+    - Lenkung (`x`) mit groesserer Deadzone (`~0.12`) fuer stabileres Geradeausfahren.
+    - Schub (`y`) mit kleiner Deadzone (`~0.04`).
+  - Nach Deadzone wird auf den Restbereich `[-1.0,1.0]` remappt.
+  - Geschwindigkeitsabhaengige Lenkdaempfung:
+    - Ab hoeherem Schub (`|y| > ~0.35`) wird der effektive Lenkeingang progressiv reduziert.
+    - Bei Vollgas bleibt nur ein reduzierter Anteil des Lenkeingangs aktiv (`~35%`).
+    - Ziel: bei hoher Geschwindigkeit praeziser lenken, ohne das Verhalten bei niedriger Geschwindigkeit zu verlieren.
   - `x` zuerst auf `5°`-Raster quantisieren, dann mischen.
   - Radwerte:
     - `left = y + x_mix`

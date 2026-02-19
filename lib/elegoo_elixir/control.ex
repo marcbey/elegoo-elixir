@@ -25,9 +25,11 @@ defmodule ElegooElixir.Control do
   @steer_step_deg 5
   @speed_step_percent 5
   @speed_step_value max(1, round(255 * (@speed_step_percent / 100)))
-  @joystick_deadzone 0.04
+  @throttle_deadzone 0.04
+  @steer_deadzone 0.12
+  @high_speed_steer_start 0.35
+  @min_steer_gain_at_full_speed 0.35
   @sensor_timeout_ms 250
-  @reverse_spin_threshold_deg 25
   @camera_servo_id 1
   @camera_servo_center_deg 90
   @camera_servo_min_deg 15
@@ -85,9 +87,9 @@ defmodule ElegooElixir.Control do
 
   @spec joystick_vector(number(), number()) :: joystick_vector()
   def joystick_vector(x, y) do
-    x = x |> to_float() |> clamp_float(-1.0, 1.0) |> apply_deadzone()
-    y = y |> to_float() |> clamp_float(-1.0, 1.0) |> apply_deadzone()
-    steer_deg = quantize_steer(x)
+    x = x |> to_float() |> clamp_float(-1.0, 1.0) |> apply_symmetric_deadzone(@steer_deadzone)
+    y = y |> to_float() |> clamp_float(-1.0, 1.0) |> apply_symmetric_deadzone(@throttle_deadzone)
+    steer_deg = x |> speed_adjusted_steer_input(y) |> quantize_steer()
     x_mix = steer_deg / @max_steer_deg
 
     left = y + x_mix
@@ -204,8 +206,25 @@ defmodule ElegooElixir.Control do
   defp clamp_float(value, _min, max) when value > max, do: max
   defp clamp_float(value, _min, _max), do: value
 
-  defp apply_deadzone(value) when abs(value) < @joystick_deadzone, do: 0.0
-  defp apply_deadzone(value), do: value
+  defp apply_symmetric_deadzone(value, deadzone) when abs(value) < deadzone, do: 0.0
+
+  defp apply_symmetric_deadzone(value, deadzone) do
+    sign = if value < 0, do: -1.0, else: 1.0
+    sign * ((abs(value) - deadzone) / (1.0 - deadzone))
+  end
+
+  defp speed_adjusted_steer_input(x, y) do
+    speed = abs(y)
+
+    speed_ratio =
+      speed
+      |> Kernel.-(@high_speed_steer_start)
+      |> Kernel./(1.0 - @high_speed_steer_start)
+      |> clamp_float(0.0, 1.0)
+
+    steer_gain = 1.0 - speed_ratio * (1.0 - @min_steer_gain_at_full_speed)
+    x * steer_gain
+  end
 
   defp quantize_steer(x) do
     x
@@ -271,8 +290,8 @@ defmodule ElegooElixir.Control do
 
     direction =
       cond do
-        steer_deg >= @reverse_spin_threshold_deg -> :right
-        steer_deg <= -@reverse_spin_threshold_deg -> :left
+        steer_deg > 0 -> :right
+        steer_deg < 0 -> :left
         true -> :backward
       end
 

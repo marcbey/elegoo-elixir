@@ -269,7 +269,7 @@ defmodule ElegooElixirWeb.ControlLive do
                 max="75"
                 step="15"
                 value={@camera_pan}
-                class="mt-3 w-full accent-teal-600"
+                class="mt-3 w-full"
                 phx-hook="CameraPanSlider"
                 aria-label="Kamera seitlich schwenken"
               />

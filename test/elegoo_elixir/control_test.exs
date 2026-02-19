@@ -7,7 +7,7 @@ defmodule ElegooElixir.ControlTest do
     assert %{command: :stop, command_key: :stop, steer_deg: 0} = Control.joystick_vector(0.0, 0.0)
 
     assert %{command: :stop, command_key: :stop, steer_deg: 0} =
-             Control.joystick_vector(0.02, 0.02)
+             Control.joystick_vector(0.1, 0.02)
   end
 
   test "joystick_vector maps forward to differential motor command" do
@@ -26,6 +26,22 @@ defmodule ElegooElixir.ControlTest do
            } = Control.joystick_vector(0.0, -1.0)
   end
 
+  test "joystick_vector maps reverse steering directions analog to forward steering" do
+    assert %{
+             command: {:drive, :right, speed_right_cmd},
+             command_key: {:drive, :right, speed_right_key}
+           } = Control.joystick_vector(0.5, -1.0)
+
+    assert speed_right_cmd == speed_right_key
+
+    assert %{
+             command: {:drive, :left, speed_left_cmd},
+             command_key: {:drive, :left, speed_left_key}
+           } = Control.joystick_vector(-0.5, -1.0)
+
+    assert speed_left_cmd == speed_left_key
+  end
+
   test "joystick_vector maps pure right/left to rotate commands with clamped steer" do
     assert %{
              command: {:drive, :right, 255},
@@ -41,13 +57,22 @@ defmodule ElegooElixir.ControlTest do
   end
 
   test "joystick_vector quantizes steer to 5 degree increments" do
-    assert %{steer_deg: 5} = Control.joystick_vector(0.11, 0.0)
-    assert %{steer_deg: -5} = Control.joystick_vector(-0.11, 0.0)
+    assert %{steer_deg: 0} = Control.joystick_vector(0.15, 0.0)
+    assert %{steer_deg: 5} = Control.joystick_vector(0.2, 0.0)
+    assert %{steer_deg: -5} = Control.joystick_vector(-0.2, 0.0)
   end
 
   test "joystick_vector quantizes speed to 5 percent steps" do
-    assert %{left_speed: 52, right_speed: 52, command: {:motor_speed, 52, 52}} =
+    assert %{left_speed: 39, right_speed: 39, command: {:motor_speed, 39, 39}} =
              Control.joystick_vector(0.0, 0.2)
+  end
+
+  test "joystick_vector reduces steering sensitivity at high speed" do
+    low_speed = Control.joystick_vector(0.5, 0.2)
+    high_speed = Control.joystick_vector(0.5, 1.0)
+
+    assert abs(low_speed.steer_deg) > abs(high_speed.steer_deg)
+    assert high_speed.steer_deg > 0
   end
 
   test "differential_speeds behaves correctly at extreme steering values" do
