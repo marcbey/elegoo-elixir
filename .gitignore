@@ -39,3 +39,7 @@ npm-debug.log
 *.db
 *.db-*
 
+# Local documentation dump (do not track)
+/docs/
+
+.DS_Store
