@@ -20,8 +20,9 @@ defmodule ElegooElixirWeb.Router do
     live "/", ControlLive
   end
 
-  # Other scopes may use custom stacks.
-  # scope "/api", ElegooElixirWeb do
-  #   pipe_through :api
-  # end
+  scope "/api", ElegooElixirWeb do
+    pipe_through :api
+
+    post "/speech/transcribe", SpeechController, :transcribe
+  end
 end

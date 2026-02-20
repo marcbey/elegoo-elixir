@@ -32,6 +32,21 @@ config :elegoo_elixir, :car,
   sensor_poll_ms: String.to_integer(System.get_env("SENSOR_POLL_MS", "250")),
   cli_timeout_ms: String.to_integer(System.get_env("CLI_TIMEOUT_MS", "1500"))
 
+config :elegoo_elixir, :speech,
+  provider: System.get_env("STT_PROVIDER", "whisper_local"),
+  base_url: System.get_env("STT_BASE_URL", "http://127.0.0.1:8088"),
+  path: System.get_env("STT_PATH", "/inference"),
+  stt_timeout_ms: String.to_integer(System.get_env("STT_TIMEOUT_MS", "10000")),
+  stt_language: System.get_env("STT_LANGUAGE", "en"),
+  whisper_autostart:
+    String.downcase(System.get_env("WHISPER_AUTOSTART", "false")) in ["1", "true", "yes", "on"],
+  whisper_launch_cmd: System.get_env("WHISPER_LAUNCH_CMD"),
+  whisper_restart_ms: String.to_integer(System.get_env("WHISPER_RESTART_MS", "5000")),
+  voice_max_clip_ms: String.to_integer(System.get_env("VOICE_MAX_CLIP_MS", "4500")),
+  voice_min_command_interval_ms:
+    String.to_integer(System.get_env("VOICE_MIN_COMMAND_INTERVAL_MS", "250")),
+  voice_default_speed: String.to_integer(System.get_env("VOICE_DEFAULT_SPEED", "120"))
+
 if config_env() == :prod do
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you

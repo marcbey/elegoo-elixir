@@ -16,6 +16,19 @@ config :elegoo_elixir, :car,
   sensor_poll_ms: 250,
   cli_timeout_ms: 1_500
 
+config :elegoo_elixir, :speech,
+  provider: "whisper_local",
+  base_url: "http://127.0.0.1:8088",
+  path: "/inference",
+  stt_timeout_ms: 10_000,
+  stt_language: "en",
+  whisper_autostart: false,
+  whisper_launch_cmd: nil,
+  whisper_restart_ms: 5_000,
+  voice_max_clip_ms: 4_500,
+  voice_min_command_interval_ms: 250,
+  voice_default_speed: 120
+
 # Configure the endpoint
 config :elegoo_elixir, ElegooElixirWeb.Endpoint,
   url: [host: "localhost"],

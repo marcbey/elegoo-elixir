@@ -84,6 +84,22 @@ defmodule Mix.Tasks.CarTaskTest do
     assert output =~ "last_seen_at="
   end
 
+  test "voice dry-run parses transcript without network interaction" do
+    output =
+      capture_io(fn ->
+        run_task(["voice", "--text", "drive forward", "--dry-run"])
+      end)
+
+    assert output =~ "voice intent: Drive forward"
+    assert output =~ "voice: dry-run, command not sent"
+  end
+
+  test "voice raises when transcript is unknown" do
+    assert_raise Mix.Error, ~r/voice: could not parse transcript/, fn ->
+      run_task(["voice", "--text", "bitte tanzen", "--dry-run"])
+    end
+  end
+
   defp run_task(args) do
     Mix.Task.reenable("car")
     Mix.Task.run("car", args)

@@ -61,9 +61,10 @@
   - `15°`-Schritte links/rechts.
   - UI-Limit `15°..165°`.
 - CLI (`mix car ...`):
-  - mindestens `connect`, `stop`, `drive`, `turn`, `servo`, `sensor`, `status`.
+  - mindestens `connect`, `stop`, `drive`, `turn`, `servo`, `sensor`, `status`, `voice`.
   - `turn` mit explizitem Lenkeinschlag und Geschwindigkeit.
   - `servo` fuer Kamera-Schwenk (`--angle` oder `--center`).
+  - `voice --text "..." [--dry-run]` mapped englischen Text ueber denselben Speech-Parser auf Control-Befehle.
 
 ## 8. Safety und Laufzeit
 - Bei Disconnect/Socket-Fehler: sicherer Stop (`N=100`, falls erreichbar) und Status auf getrennt.
@@ -79,6 +80,13 @@
   - `CONTROL_TICK_MS` (z. B. `33..50`)
   - `SENSOR_POLL_MS` (z. B. `150..300`)
   - `CLI_TIMEOUT_MS`
+  - `STT_BASE_URL` (Default `http://127.0.0.1:8088`)
+  - `STT_PATH` (Default `/inference`)
+  - `STT_LANGUAGE` (Default `en`)
+  - `STT_TIMEOUT_MS` (z. B. `5000..15000`)
+  - `VOICE_MAX_CLIP_MS` (z. B. `3000..6000`)
+  - `VOICE_MIN_COMMAND_INTERVAL_MS` (z. B. `200..400`)
+  - `VOICE_DEFAULT_SPEED` (z. B. `80..160`)
 
 ## 10. Referenzen
 - Quellen liegen unter `docs/` (lokal, nicht versioniert).
@@ -151,6 +159,20 @@
   - `setPointerCapture`/`releasePointerCapture` defensiv in `try/catch`.
   - Not-Aus-Feedback clientseitig (Hook), sofort sichtbar, unabhaengig vom Roundtrip.
   - Aktueller Not-Aus-Style: Tailwind-UI-nahes rotes Pattern, Text `Not Aus`, kurzer Klick-Schatten-Effekt.
+
+- Sprachsteuerung (Whisper lokal):
+  - Optionaler Sidecar-Start: bei `WHISPER_AUTOSTART=true` startet die App den lokalen whisper.cpp-Prozess selbst beim `mix phx.server`-Boot.
+  - Startkommando wird ueber `WHISPER_LAUNCH_CMD` gesetzt; bei Exit wird mit `WHISPER_RESTART_MS` neu gestartet.
+  - Browser nutzt Always-On-Hoermodus (ohne Button) via WebAudio/WAV-Aufnahme.
+  - Audio wird als Multipart-Upload an `POST /api/speech/transcribe` gesendet.
+  - Backend-Adapter (`Speech.STTClient`) ruft lokalen whisper.cpp HTTP-Endpunkt (Default `/inference`) auf.
+  - Sprache ist auf Englisch ausgelegt (`STT_LANGUAGE=en`).
+  - Sprachparser ist deterministisch (`Speech.CommandParser`), keine freie LLM-Interpretation.
+  - Unbekannte/unklare Spracheingaben duerfen keine Fahrbewegung ausloesen.
+  - Safety:
+    - De-Dupe + Rate-Limit pro Sprachkommando (`VOICE_MIN_COMMAND_INTERVAL_MS`).
+    - Bewegungsbefehle laufen weiter, bis ein neues Sprachkommando gesendet wird (z. B. `stop`).
+  - Sprachbefehle werden ueber denselben `Control`-Context ausgefuehrt wie UI/CLI.
 
 - Betriebsmodus ohne DB:
   - App laeuft vollstaendig ohne Repo/Ecto-Migrator.

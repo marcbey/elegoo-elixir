@@ -3,6 +3,9 @@ defmodule ElegooElixirWeb.ControlLive do
 
   alias ElegooElixir.CarProtocol
   alias ElegooElixir.Control
+  alias ElegooElixir.Speech.CommandExecutor
+  alias ElegooElixir.Speech.CommandParser
+  alias ElegooElixir.Speech.SafetyGuard
 
   @impl true
   def mount(_params, _session, socket) do
@@ -24,6 +27,12 @@ defmodule ElegooElixirWeb.ControlLive do
      |> assign(:driving_active, false)
      |> assign(:camera_pan, 0)
      |> assign(:camera_angle, Control.camera_servo_center_deg())
+     |> assign(:voice_state, :idle)
+     |> assign(:voice_transcript, nil)
+     |> assign(:voice_intent, nil)
+     |> assign(:voice_feedback, nil)
+     |> assign(:voice_executor_state, CommandExecutor.initial_state())
+     |> assign(:voice_safety_guard, SafetyGuard.new())
      |> assign(:ultrasound, nil)
      |> assign(:line_sensors, %{left: nil, middle: nil, right: nil})
      |> assign(:last_error, nil)}
@@ -118,6 +127,44 @@ defmodule ElegooElixirWeb.ControlLive do
     {:noreply, socket}
   end
 
+  def handle_event("voice_state", %{"state" => state}, socket) do
+    voice_state =
+      case state do
+        "listening" -> :listening
+        "processing" -> :processing
+        "unsupported" -> :unsupported
+        _ -> :idle
+      end
+
+    {:noreply, assign(socket, :voice_state, voice_state)}
+  end
+
+  def handle_event("voice_error", %{"message" => message}, socket) do
+    socket =
+      socket
+      |> assign(:voice_state, :idle)
+      |> assign(:voice_feedback, "Sprachfehler: #{message}")
+
+    {:noreply, socket}
+  end
+
+  def handle_event("voice_transcript", %{"text" => text}, socket) do
+    transcript = text |> to_string() |> String.trim()
+
+    socket =
+      socket
+      |> assign(:voice_state, :idle)
+      |> assign(:voice_transcript, transcript)
+
+    cond do
+      transcript == "" ->
+        {:noreply, assign(socket, :voice_feedback, "Keine Sprache erkannt.")}
+
+      true ->
+        execute_voice_transcript(transcript, socket)
+    end
+  end
+
   @impl true
   def handle_info(:poll_sensors, socket) do
     initial_status = Control.status()
@@ -177,7 +224,7 @@ defmodule ElegooElixirWeb.ControlLive do
         </div>
       </section>
 
-      <section class="grid gap-6 xl:grid-cols-[1.8fr_1fr]">
+      <section class="grid gap-6 lg:grid-cols-2 lg:items-start">
         <article class="control-card overflow-hidden rounded-2xl">
           <div class="flex items-center justify-between border-b border-slate-200 px-5 py-5">
             <h2 class="text-sm font-bold uppercase tracking-[0.14em] text-slate-700">Live Kamera</h2>
@@ -185,116 +232,168 @@ defmodule ElegooElixirWeb.ControlLive do
           <img src={@stream_url} alt="Camera stream" class="aspect-video w-full object-cover" />
         </article>
 
-        <article class="control-card rounded-2xl p-5">
-          <h2 class="mb-4 text-sm font-bold uppercase tracking-[0.14em] text-slate-700">Sensoren</h2>
-          <dl class="space-y-3">
-            <div class="rounded-xl bg-slate-50 p-3">
-              <dt class="text-xs font-semibold uppercase text-slate-500">Ultraschall</dt>
-              <dd class="mt-1 text-xl font-black text-slate-900">{format_sensor(@ultrasound)}</dd>
+        <section class="control-card rounded-2xl p-5">
+          <div class="mb-4 flex flex-wrap items-start justify-between gap-2">
+            <h2 class="text-sm font-bold uppercase tracking-[0.14em] text-slate-700">
+              Joystick-Steuerung
+            </h2>
+            <button
+              id="emergency-stop-btn"
+              class="e-stop-btn inline-flex items-center justify-center rounded-xl bg-rose-600 px-8 py-5 text-xl font-extrabold tracking-wide text-white shadow-lg shadow-rose-600/30 transition hover:bg-rose-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 active:bg-rose-700"
+              phx-hook="EmergencyStopButton"
+              phx-click="emergency_stop"
+            >
+              Not Aus
+            </button>
+          </div>
+
+          <div class="grid gap-6 lg:grid-cols-[1.4fr_1fr] lg:items-center">
+            <div id="drive-joystick" phx-hook="Joystick" phx-update="ignore" class="joystick-shell">
+              <div
+                class="joystick-area"
+                data-joystick-area
+                role="application"
+                aria-label="Fahr-Joystick"
+              >
+                <div class="joystick-knob" data-joystick-knob></div>
+              </div>
             </div>
-            <div class="grid grid-cols-3 gap-2">
-              <div class="rounded-xl bg-slate-50 p-3 text-center">
-                <p class="text-[11px] font-semibold uppercase text-slate-500">Linie L</p>
-                <p class="mt-1 text-lg font-bold text-slate-900">
-                  {format_sensor(@line_sensors.left)}
+
+            <div class="space-y-3">
+              <div class="rounded-xl bg-slate-50 p-4">
+                <p class="text-xs font-semibold uppercase tracking-[0.11em] text-slate-500">
+                  Fahrzustand
+                </p>
+                <p class="mt-1 text-lg font-black text-slate-900">{throttle_label(@joystick)}</p>
+                <p class={[
+                  "min-h-5 text-sm text-slate-600",
+                  if(hide_straight_label?(@joystick), do: "invisible", else: "visible")
+                ]}>
+                  {steering_label(@joystick)}
                 </p>
               </div>
-              <div class="rounded-xl bg-slate-50 p-3 text-center">
-                <p class="text-[11px] font-semibold uppercase text-slate-500">Linie M</p>
-                <p class="mt-1 text-lg font-bold text-slate-900">
-                  {format_sensor(@line_sensors.middle)}
+              <div class="rounded-xl bg-slate-50 p-4">
+                <p class="text-xs font-semibold uppercase tracking-[0.11em] text-slate-500">
+                  Kamera (Servo)
                 </p>
+                <p class="mt-1 text-lg font-black text-slate-900">{@camera_angle}°</p>
+                <input
+                  id="camera-pan-slider"
+                  type="range"
+                  name="pan"
+                  min="-75"
+                  max="75"
+                  step="15"
+                  value={@camera_pan}
+                  class="mt-3 w-full"
+                  phx-hook="CameraPanSlider"
+                  aria-label="Kamera seitlich schwenken"
+                />
+                <div class="mt-2 flex justify-between text-xs font-semibold uppercase text-slate-500">
+                  <span>Links</span>
+                  <span>Mitte</span>
+                  <span>Rechts</span>
+                </div>
               </div>
-              <div class="rounded-xl bg-slate-50 p-3 text-center">
-                <p class="text-[11px] font-semibold uppercase text-slate-500">Linie R</p>
-                <p class="mt-1 text-lg font-bold text-slate-900">
-                  {format_sensor(@line_sensors.right)}
+              <div class="grid grid-cols-2 gap-3">
+                <div class="rounded-xl bg-slate-50 p-3">
+                  <p class="text-xs font-semibold uppercase text-slate-500">Geschwindigkeit</p>
+                  <p class="mt-1 text-xl font-black text-slate-900">
+                    {joystick_power_percent(@joystick)}%
+                  </p>
+                </div>
+                <div class="rounded-xl bg-slate-50 p-3">
+                  <p class="text-xs font-semibold uppercase text-slate-500">Lenkeinschlag</p>
+                  <p class="mt-1 text-xl font-black text-slate-900">
+                    {@steer_deg}°
+                  </p>
+                </div>
+              </div>
+              <div
+                id="voice-handsfree-panel"
+                class="rounded-xl bg-slate-50 p-4"
+                data-voice-panel
+                phx-hook="SpeechPushToTalk"
+                data-endpoint={~p"/api/speech/transcribe"}
+                data-max-clip-ms={voice_max_clip_ms()}
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <p class="text-xs font-semibold uppercase tracking-[0.11em] text-slate-500">
+                    Sprache (Whisper)
+                  </p>
+                  <span class="rounded-full bg-teal-100 px-3 py-1 text-[11px] font-bold uppercase text-teal-800">
+                    Always On
+                  </span>
+                </div>
+
+                <div class="mt-3">
+                  <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                    Mikro Pegel
+                  </p>
+                  <div
+                    class="voice-level-meter mt-1"
+                    role="meter"
+                    aria-label="Mikrofon Ausschlag"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    aria-valuenow="0"
+                    data-voice-level-meter
+                  >
+                    <div class="voice-level-fill" data-voice-level-fill></div>
+                  </div>
+                </div>
+
+                <p class="mt-2 text-sm font-semibold text-slate-900">
+                  {voice_state_label(@voice_state)}
+                </p>
+                <p class="mt-1 min-h-5 text-sm text-slate-600">
+                  {voice_feedback_label(@voice_feedback)}
+                </p>
+                <p class="mt-2 text-xs text-slate-500">
+                  Letztes Transkript:
+                  <span class="font-semibold text-slate-700">{@voice_transcript || "-"}</span>
+                </p>
+                <p class="text-xs text-slate-500">
+                  Intent: <span class="font-semibold text-slate-700">{@voice_intent || "-"}</span>
+                </p>
+                <p class="text-xs text-slate-500">
+                  Voice-Tempo:
+                  <span class="font-semibold text-slate-700">{@voice_executor_state.speed}</span>
                 </p>
               </div>
             </div>
-          </dl>
-        </article>
+          </div>
+        </section>
       </section>
 
       <section class="control-card mt-6 rounded-2xl p-5">
-        <div class="mb-4 flex flex-wrap items-start justify-between gap-2">
-          <h2 class="text-sm font-bold uppercase tracking-[0.14em] text-slate-700">
-            Joystick-Steuerung
-          </h2>
-          <button
-            id="emergency-stop-btn"
-            class="e-stop-btn inline-flex items-center justify-center rounded-xl bg-rose-600 px-8 py-5 text-xl font-extrabold tracking-wide text-white shadow-lg shadow-rose-600/30 transition hover:bg-rose-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 active:bg-rose-700"
-            phx-hook="EmergencyStopButton"
-            phx-click="emergency_stop"
-          >
-            Not Aus
-          </button>
-        </div>
-
-        <div class="grid gap-6 lg:grid-cols-[1.4fr_1fr] lg:items-center">
-          <div id="drive-joystick" phx-hook="Joystick" phx-update="ignore" class="joystick-shell">
-            <div
-              class="joystick-area"
-              data-joystick-area
-              role="application"
-              aria-label="Fahr-Joystick"
-            >
-              <div class="joystick-knob" data-joystick-knob></div>
+        <h2 class="mb-4 text-sm font-bold uppercase tracking-[0.14em] text-slate-700">Sensoren</h2>
+        <dl class="space-y-3">
+          <div class="rounded-xl bg-slate-50 p-3">
+            <dt class="text-xs font-semibold uppercase text-slate-500">Ultraschall</dt>
+            <dd class="mt-1 text-xl font-black text-slate-900">{format_sensor(@ultrasound)}</dd>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div class="rounded-xl bg-slate-50 p-3 text-center">
+              <p class="text-[11px] font-semibold uppercase text-slate-500">Linie L</p>
+              <p class="mt-1 text-lg font-bold text-slate-900">
+                {format_sensor(@line_sensors.left)}
+              </p>
+            </div>
+            <div class="rounded-xl bg-slate-50 p-3 text-center">
+              <p class="text-[11px] font-semibold uppercase text-slate-500">Linie M</p>
+              <p class="mt-1 text-lg font-bold text-slate-900">
+                {format_sensor(@line_sensors.middle)}
+              </p>
+            </div>
+            <div class="rounded-xl bg-slate-50 p-3 text-center">
+              <p class="text-[11px] font-semibold uppercase text-slate-500">Linie R</p>
+              <p class="mt-1 text-lg font-bold text-slate-900">
+                {format_sensor(@line_sensors.right)}
+              </p>
             </div>
           </div>
-
-          <div class="space-y-3">
-            <div class="rounded-xl bg-slate-50 p-4">
-              <p class="text-xs font-semibold uppercase tracking-[0.11em] text-slate-500">
-                Fahrzustand
-              </p>
-              <p class="mt-1 text-lg font-black text-slate-900">{throttle_label(@joystick)}</p>
-              <p class={[
-                "min-h-5 text-sm text-slate-600",
-                if(hide_straight_label?(@joystick), do: "invisible", else: "visible")
-              ]}>
-                {steering_label(@joystick)}
-              </p>
-            </div>
-            <div class="rounded-xl bg-slate-50 p-4">
-              <p class="text-xs font-semibold uppercase tracking-[0.11em] text-slate-500">
-                Kamera (Servo)
-              </p>
-              <p class="mt-1 text-lg font-black text-slate-900">{@camera_angle}°</p>
-              <input
-                id="camera-pan-slider"
-                type="range"
-                name="pan"
-                min="-75"
-                max="75"
-                step="15"
-                value={@camera_pan}
-                class="mt-3 w-full"
-                phx-hook="CameraPanSlider"
-                aria-label="Kamera seitlich schwenken"
-              />
-              <div class="mt-2 flex justify-between text-xs font-semibold uppercase text-slate-500">
-                <span>Links</span>
-                <span>Mitte</span>
-                <span>Rechts</span>
-              </div>
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-              <div class="rounded-xl bg-slate-50 p-3">
-                <p class="text-xs font-semibold uppercase text-slate-500">Geschwindigkeit</p>
-                <p class="mt-1 text-xl font-black text-slate-900">
-                  {joystick_power_percent(@joystick)}%
-                </p>
-              </div>
-              <div class="rounded-xl bg-slate-50 p-3">
-                <p class="text-xs font-semibold uppercase text-slate-500">Lenkeinschlag</p>
-                <p class="mt-1 text-xl font-black text-slate-900">
-                  {@steer_deg}°
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+        </dl>
       </section>
     </main>
     """
@@ -322,6 +421,99 @@ defmodule ElegooElixirWeb.ControlLive do
       Control.connect()
       socket
     end
+  end
+
+  defp execute_voice_transcript(transcript, socket) do
+    with {:ok, intent} <- CommandParser.parse(transcript),
+         {:ok, safety_guard} <- allow_voice_command(intent, socket.assigns.voice_safety_guard),
+         {:ok, execution, executor_state} <-
+           CommandExecutor.execute(intent, socket.assigns.voice_executor_state) do
+      socket =
+        socket
+        |> assign(:voice_intent, CommandParser.describe_intent(intent))
+        |> assign(:voice_feedback, execution.message)
+        |> assign(:voice_executor_state, executor_state)
+        |> assign(:voice_safety_guard, safety_guard)
+        |> maybe_sync_camera_from_executor(executor_state)
+        |> sync_drive_state(execution)
+        |> assign(:status, Control.status())
+        |> assign(:last_error, nil)
+
+      {:noreply, socket}
+    else
+      {:error, :empty} ->
+        {:noreply, assign(socket, :voice_feedback, "Kein gueltiger Text erkannt.")}
+
+      {:error, :unknown} ->
+        {:noreply, assign(socket, :voice_feedback, "Unbekanntes Sprachkommando.")}
+
+      {:skip, :duplicate, safety_guard} ->
+        socket =
+          socket
+          |> assign(:voice_safety_guard, safety_guard)
+          |> assign(:voice_feedback, "Befehl ignoriert (Duplikat).")
+
+        {:noreply, socket}
+
+      {:skip, :rate_limited, safety_guard} ->
+        socket =
+          socket
+          |> assign(:voice_safety_guard, safety_guard)
+          |> assign(:voice_feedback, "Befehl ignoriert (zu schnell hintereinander).")
+
+        {:noreply, socket}
+
+      {:error, reason, executor_state} ->
+        socket =
+          socket
+          |> assign(:voice_executor_state, executor_state)
+          |> assign(:voice_feedback, "Sprachbefehl fehlgeschlagen: #{inspect(reason)}")
+          |> assign(:status, Control.status())
+          |> maybe_assign_error({:error, reason})
+
+        {:noreply, socket}
+    end
+  end
+
+  defp allow_voice_command(%{kind: :stop} = intent, guard) do
+    intent
+    |> CommandParser.intent_key()
+    |> then(&SafetyGuard.allow?(guard, &1, bypass: true))
+    |> reduce_safety_result()
+  end
+
+  defp allow_voice_command(intent, guard) do
+    intent
+    |> CommandParser.intent_key()
+    |> then(&SafetyGuard.allow?(guard, &1))
+    |> reduce_safety_result()
+  end
+
+  defp reduce_safety_result({:ok, guard}), do: {:ok, guard}
+  defp reduce_safety_result({:skip, reason, guard}), do: {:skip, reason, guard}
+
+  defp sync_drive_state(socket, %{motion_key: :stop}) do
+    socket
+    |> assign(:joystick, %{x: 0.0, y: 0.0})
+    |> assign(:steer_deg, 0)
+    |> assign(:last_drive_command, :stop)
+    |> assign(:driving_active, false)
+  end
+
+  defp sync_drive_state(socket, %{motion?: true, motion_key: motion_key}) do
+    socket
+    |> assign(:last_drive_command, motion_key)
+    |> assign(:driving_active, true)
+  end
+
+  defp sync_drive_state(socket, _execution), do: socket
+
+  defp maybe_sync_camera_from_executor(socket, %{camera_angle: camera_angle}) do
+    pan = quantize_camera_pan(camera_angle - Control.camera_servo_center_deg())
+
+    socket
+    |> assign(:camera_angle, camera_angle)
+    |> assign(:camera_pan, pan)
   end
 
   defp maybe_assign_error(socket, {:ok, _result}), do: assign(socket, :last_error, nil)
@@ -397,4 +589,17 @@ defmodule ElegooElixirWeb.ControlLive do
 
   defp status_error_message(last_error, _status_error) when is_binary(last_error), do: last_error
   defp status_error_message(_last_error, status_error), do: "Fehler: #{inspect(status_error)}"
+
+  defp voice_state_label(:listening), do: "Aufnahme laeuft"
+  defp voice_state_label(:processing), do: "Transkription laeuft"
+  defp voice_state_label(:unsupported), do: "Browser unterstuetzt kein Mikrofon-Recording"
+  defp voice_state_label(_), do: "Bereit"
+
+  defp voice_feedback_label(nil), do: "-"
+  defp voice_feedback_label(value), do: value
+
+  defp voice_max_clip_ms do
+    Application.get_env(:elegoo_elixir, :speech, [])
+    |> Keyword.get(:voice_max_clip_ms, 4_500)
+  end
 end

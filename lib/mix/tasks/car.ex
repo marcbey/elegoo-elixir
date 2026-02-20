@@ -12,11 +12,14 @@ defmodule Mix.Tasks.Car do
     mix car servo --center
     mix car sensor --type ultrasound
     mix car sensor --type line --side all
+    mix car voice --text "drive forward" --dry-run
   """
 
   use Mix.Task
 
   alias ElegooElixir.Control
+  alias ElegooElixir.Speech.CommandExecutor
+  alias ElegooElixir.Speech.CommandParser
 
   @shortdoc "Control the Elegoo car over TCP"
 
@@ -59,6 +62,9 @@ defmodule Mix.Tasks.Car do
 
       ["sensor" | rest] ->
         run_sensor(rest, timeout_ms(global_opts))
+
+      ["voice" | rest] ->
+        run_voice(rest, timeout_ms(global_opts))
 
       _ ->
         print_usage()
@@ -166,6 +172,46 @@ defmodule Mix.Tasks.Car do
     print_result(Control.set_camera_servo(angle), "servo")
   end
 
+  defp run_voice(args, timeout_ms) do
+    {opts, _, invalid} =
+      OptionParser.parse(args, strict: [text: :string, dry_run: :boolean], aliases: [t: :text])
+
+    if invalid != [] do
+      Mix.raise("Invalid voice options: #{inspect(invalid)}")
+    end
+
+    transcript =
+      opts
+      |> Keyword.get(:text, "")
+      |> String.trim()
+
+    if transcript == "" do
+      Mix.raise("voice: missing required --text")
+    end
+
+    intent =
+      case CommandParser.parse(transcript) do
+        {:ok, intent} -> intent
+        {:error, reason} -> Mix.raise("voice: could not parse transcript (#{inspect(reason)})")
+      end
+
+    Mix.shell().info("voice intent: #{CommandParser.describe_intent(intent)}")
+
+    if opts[:dry_run] do
+      Mix.shell().info("voice: dry-run, command not sent")
+    else
+      ensure_connected!(timeout_ms)
+
+      case CommandExecutor.execute(intent, CommandExecutor.initial_state()) do
+        {:ok, result, _state} ->
+          Mix.shell().info("voice: ok (#{result.message})")
+
+        {:error, reason, _state} ->
+          Mix.raise("voice: failed (#{inspect(reason)})")
+      end
+    end
+  end
+
   defp ensure_connected!(timeout_ms) do
     if Control.status().connected do
       :ok
@@ -253,6 +299,7 @@ defmodule Mix.Tasks.Car do
       mix car servo [--angle 15..165 | --center]
       mix car sensor --type ultrasound
       mix car sensor --type line --side all|left|middle|right
+      mix car voice --text "drive forward" [--dry-run]
     """)
   end
 end

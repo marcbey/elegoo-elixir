@@ -34,6 +34,7 @@ defmodule ElegooElixir.Application do
       ElegooElixirWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:elegoo_elixir, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: ElegooElixir.PubSub},
+      ElegooElixir.Speech.WhisperSidecar,
       ElegooElixir.CarTcpClient,
       ElegooElixirWeb.Endpoint
     ]
